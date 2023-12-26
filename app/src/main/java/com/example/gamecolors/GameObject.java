@@ -1,36 +1,80 @@
 package com.example.gamecolors;
 
-import android.graphics.Color;
+import android.graphics.Point;
+import java.util.ArrayList;
+import java.util.List;
 
 public class GameObject {
-    private int x, y, color;
-    private int dx, dy; // Kierunki ruchu
-    private int speed = 10;
+    private int x, y;
+    private int dx, dy;
+    private int speed = 20;
+    private boolean isActive = false;
+    private List<Point> tail;
+    public static final int OBJECT_SIZE = 100; // Rozmiar głównego obiektu
 
-    public GameObject() {
-        x = 0;
-        y = 0;
-        dx = speed;
-        dy = speed;
-        color = Color.BLUE;
+
+    public GameObject(int startX, int startY) {
+        x = startX;
+        y = startY;
+        tail = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            tail.add(new Point(x, y)); // Ustawienie segmentów ogona w pozycji początkowej
+        }
     }
 
-    public void move() {
-        x += dx;
-        y += dy;
-        // Dodaj logikę sprawdzającą granice ekranu, jeśli to konieczne
+    public void move(int screenWidth, int screenHeight) {
+        if (!isActive) {
+            return;
+        }
+
+        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+        float normDx = (distance != 0) ? (dx / distance) : 0;
+        float normDy = (distance != 0) ? (dy / distance) : 0;
+
+        x += normDx * speed;
+        y += normDy * speed;
+
+        updateTail(screenWidth,screenHeight);
+        checkBounds(screenWidth, screenHeight);
     }
 
-    public void setDirection(int dx, int dy) {
-        this.dx = dx;
-        this.dy = dy;
+    private void updateTail(int screenWidth, int screenHeight) {
+        // Aktualizacja reszty segmentów ogona
+        for (int i = tail.size() - 1; i > 0; i--) {
+            Point prevSegment = tail.get(i - 1);
+            Point segment = tail.get(i);
+            segment.set(prevSegment.x, prevSegment.y);
+        }
+
+        // Aktualizacja pierwszego segmentu, aby pasował do pozycji głowy
+        if (!tail.isEmpty()) {
+            tail.get(0).set(x, y);
+        }
     }
 
-    // Gettery i Settery
+
+
+
+    private void checkBounds(int screenWidth, int screenHeight) {
+        if (x > screenWidth) x = 0;
+        else if (x < 0) x = screenWidth;
+        if (y > screenHeight) y = 0;
+        else if (y < 0) y = screenHeight;
+    }
+
+    public void setDirection(int targetX, int targetY) {
+        isActive = true;
+        float distance = (float) Math.sqrt((targetX - x) * (targetX - x) + (targetY - y) * (targetY - y));
+        dx = (distance != 0) ? (int) ((targetX - x) / distance * speed) : 0;
+        dy = (distance != 0) ? (int) ((targetY - y) / distance * speed) : 0;
+
+    }
+
     public int getX() { return x; }
     public int getY() { return y; }
-    public int getColor() { return color; }
     public void setX(int x) { this.x = x; }
     public void setY(int y) { this.y = y; }
-    public void setColor(int color) { this.color = color; }
+    public List<Point> getTail() { return tail; }
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
 }
