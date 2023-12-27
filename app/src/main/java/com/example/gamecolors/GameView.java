@@ -1,18 +1,28 @@
 package com.example.gamecolors;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Typeface;
+import android.text.TextUtils;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.content.Intent;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -29,6 +39,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     private List<Rock> rocks;
     private int score = 0;
     private List<Collectible> collectibles;
+    private boolean gameEnded = false;
+    private boolean gameOver = false;
+    private ExecutorService executorService;
     public GameView(Context context) {
         super(context);
         getHolder().addCallback(this);
@@ -40,6 +53,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         collectibles = new ArrayList<>();
         rocks = new ArrayList<>();
 
+        executorService = Executors.newSingleThreadExecutor();
 
 
 
@@ -80,6 +94,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
+        }
     }
     private void initializeRocks(int count) {
         int gridSize = 4; // Rozmiar siatki, np. 4x4
@@ -119,17 +136,16 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     }
 
 
-
     @Override
     public void run() {
-        while (isPlaying) {
+        while (isPlaying && !gameOver) {
             if (gameObject.isActive()) {
                 update();
             }
             draw();
             sleep();
 
-            if (Math.random() < 0.01 ){
+            if (Math.random() < 0.01) {
                 generateRandomCollectible();
             }
         }
@@ -156,8 +172,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         }
     }
     private void resetGame() {
-        // Resetuj stan gry do wartości początkowych
-        score = 0;
+        gameOver = true;
+        Context context = getContext();
+        Intent intent = new Intent(context, MainMenuActivity.class);
+        intent.putExtra("score",score);
+        context.startActivity(intent);
+        saveScore();
+
         gameObject = new GameObject(screenWidth / 2, screenHeight / 2);
         collectibles.clear();
         rocks.clear();
@@ -237,9 +258,60 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
 
 
             drawScore(canvas);
+            drawGameOver(canvas);
             getHolder().unlockCanvasAndPost(canvas);
         }
     }
+
+    private void drawGameOver(Canvas canvas) {
+        if (gameOver) {
+            String gameOverText = "Gra zakończona";
+            String scoreText = "Wynik: " + score;
+            int textSize = 50;
+            Paint paint = new Paint();
+            paint.setColor(Color.WHITE);
+            paint.setTextSize(textSize);
+            paint.setTypeface(Typeface.DEFAULT_BOLD);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setAntiAlias(true);
+
+            // Wyświetlanie tekstu na górze ekranu
+            int yPosText = textSize + 20;
+            canvas.drawText(gameOverText, screenWidth / 2, yPosText, paint);
+            canvas.drawText(scoreText, screenWidth / 2, yPosText + textSize + 10, paint);
+
+            // Tu możesz dodać przycisk lub obszar dotykowy do powrotu do menu głównego
+        }
+    }
+    private void saveScore() {
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                SharedPreferences prefs = getContext().getSharedPreferences("game_scores", Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = prefs.edit();
+
+                // Uzyskanie aktualnej daty i czasu
+                String currentDateTime = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+
+                // Pobranie aktualnej historii wyników
+                String scores = prefs.getString("scores", "");
+
+                // Dodanie nowego wyniku z datą i czasem
+                scores = currentDateTime + ": " + score + ";" + scores;
+
+                // Przechowywanie tylko ostatnich X wyników
+                String[] savedScores = scores.split(";");
+                if (savedScores.length > 10) {
+                    scores = TextUtils.join(";", Arrays.copyOfRange(savedScores, 0, 10));
+                }
+
+                editor.putString("scores", scores);
+                editor.apply();
+            }
+        });
+    }
+
+
 
 
 
@@ -298,7 +370,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     }
 
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+        if (gameOver && event.getAction() == MotionEvent.ACTION_DOWN ) {
+            Context context = getContext();
+            Intent intent = new Intent(context, MainMenuActivity.class);
+            context.startActivity(intent);
+            return true;
+        }
+
             int touchX = (int) event.getX();
             int touchY = (int) event.getY();
 
@@ -326,7 +404,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                     gameObject.setDirection(objectX, 0); // Góra
                 }
             }
-        }
+
         return true;
     }
 }
